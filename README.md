@@ -20,7 +20,7 @@
 ### 服务器端（公网 VPS）
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/<owner>/mining-shield/main/scripts/install-server.sh | sudo bash
+curl -fsSL https://raw.githubusercontent.com/kevinfantasy2008/mining-shield/main/scripts/install-server.sh | sudo bash
 ```
 
 脚本会安装二进制、生成随机 `path`/`token` 并注册 systemd 服务。然后：
@@ -32,7 +32,7 @@ curl -fsSL https://raw.githubusercontent.com/<owner>/mining-shield/main/scripts/
 ### 本地端（矿场 Linux 机器）
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/<owner>/mining-shield/main/scripts/install-agent.sh | sudo bash
+curl -fsSL https://raw.githubusercontent.com/kevinfantasy2008/mining-shield/main/scripts/install-agent.sh | sudo bash
 ```
 
 然后编辑 `/etc/mining-shield/agent.yaml`（url/token 与服务器端一致），`systemctl start mining-shield-agent`。
@@ -43,12 +43,12 @@ curl -fsSL https://raw.githubusercontent.com/<owner>/mining-shield/main/scripts/
 
 ```bash
 # 本地端
-curl -fsSL https://gitee.com/<owner>/mining-shield/raw/main/scripts/install-agent.sh | \
-  sudo MINING_SHIELD_HOST=gitee.com MINING_SHIELD_REPO=<owner>/mining-shield bash
+curl -fsSL https://gitee.com/kevinfantasy2008/mining-shield/raw/main/scripts/install-agent.sh | \
+  sudo MINING_SHIELD_HOST=gitee.com MINING_SHIELD_REPO=kevinfantasy2008/mining-shield bash
 
 # 服务器端
-curl -fsSL https://gitee.com/<owner>/mining-shield/raw/main/scripts/install-server.sh | \
-  sudo MINING_SHIELD_HOST=gitee.com MINING_SHIELD_REPO=<owner>/mining-shield bash
+curl -fsSL https://gitee.com/kevinfantasy2008/mining-shield/raw/main/scripts/install-server.sh | \
+  sudo MINING_SHIELD_HOST=gitee.com MINING_SHIELD_REPO=kevinfantasy2008/mining-shield bash
 ```
 
 Gitee 没有 Release 直链，脚本会自动转为**从源码构建**（需要目标机器装有 Go，依赖走 goproxy.cn 国内加速）。

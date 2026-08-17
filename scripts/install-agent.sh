@@ -1,19 +1,19 @@
 #!/usr/bin/env bash
 # mining-shield 本地端（agent）一键安装脚本
 # 用法（在矿场侧 Linux 机器上执行）：
-#   GitHub:  curl -fsSL https://raw.githubusercontent.com/<owner>/mining-shield/main/scripts/install-agent.sh | sudo bash
-#   Gitee:   curl -fsSL https://gitee.com/<owner>/mining-shield/raw/main/scripts/install-agent.sh | sudo MINING_SHIELD_HOST=gitee.com bash
+#   GitHub:  curl -fsSL https://raw.githubusercontent.com/kevinfantasy2008/mining-shield/main/scripts/install-agent.sh | sudo bash
+#   Gitee:   curl -fsSL https://gitee.com/kevinfantasy2008/mining-shield/raw/main/scripts/install-agent.sh | sudo MINING_SHIELD_HOST=gitee.com bash
 # 或本地执行：
 #   sudo bash scripts/install-agent.sh
 #
 # 可用环境变量覆盖默认值：
-#   MINING_SHIELD_REPO  仓库路径（默认 <owner>/mining-shield，安装后请改成实际用户名）
+#   MINING_SHIELD_REPO  仓库路径（默认 kevinfantasy2008/mining-shield，安装后请改成实际用户名）
 #   MINING_SHIELD_HOST  github.com（默认）或 gitee.com（国内网络推荐）
 #   INSTALL_DIR         二进制安装目录（默认 /usr/local/bin）
 #   CONFIG_DIR          配置目录（默认 /etc/mining-shield）
 set -euo pipefail
 
-REPO="${MINING_SHIELD_REPO:-<owner>/mining-shield}"
+REPO="${MINING_SHIELD_REPO:-kevinfantasy2008/mining-shield}"
 HOST="${MINING_SHIELD_HOST:-github.com}"
 INSTALL_DIR="${INSTALL_DIR:-/usr/local/bin}"
 CONFIG_DIR="${CONFIG_DIR:-/etc/mining-shield}"
