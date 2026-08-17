@@ -2,3 +2,6 @@
 *.log
 agent.yaml
 server.yaml
+.DS_Store
+/agent
+/server
