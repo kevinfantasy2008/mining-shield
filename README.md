@@ -106,6 +106,22 @@ stratum+tcp://192.168.1.10:3333
 
 > 注意：矿机的备用矿池地址不要再填真实矿池的明文地址，否则隧道故障时矿机会绕过加密直连。
 
+### Windows + WSL2 运行本地端
+
+WSL2 是 NAT 网络，局域网矿机无法直接访问 WSL 内部监听的端口，两种方案：
+
+**方案 A：agent 留在 WSL，Windows 做端口转发**（管理员 PowerShell）：
+
+```powershell
+wsl hostname -I   # 查 WSL 内部 IP，重启后可能变化
+netsh interface portproxy add v4tov4 listenport=8888 listenaddress=0.0.0.0 connectport=8888 connectaddress=<WSL的IP>
+New-NetFirewallRule -DisplayName "mining-shield-agent" -Direction Inbound -LocalPort 8888 -Protocol TCP -Action Allow
+```
+
+矿机填 `stratum+tcp://<Windows主机局域网IP>:8888`。WSL 重启后需按新 IP 重建 portproxy 规则（可用任务计划程序 + 脚本自动化）。
+
+**方案 B：直接用 Windows 原生二进制**（Release 里有 `mining-shield-agent-windows-amd64.exe`）：exe 和 `agent.yaml` 放同一目录直接运行，无端口转发问题；可用任务计划程序或 NSSM 注册为开机自启服务。
+
 ## Cloudflare 代理模式（推荐）
 
 ### 开了 CF 代理还需要 Nginx 吗？—— 需要
