@@ -1,0 +1,21 @@
+# 服务器端配置（部署在公网 VPS，由 Nginx 在 443 反代）
+
+# 只监听本机回环，不直接暴露公网
+listen: "127.0.0.1:8080"
+
+# WebSocket 秘密路径（换成自己的长随机串，与 Nginx location 一致）
+path: "/CHANGE-ME-random-path"
+
+# 认证令牌（长随机串，与本地端一致）。生成：openssl rand -hex 32
+token: "CHANGE-ME-long-random-token-at-least-32-chars"
+
+# 真实矿池列表，按顺序 failover
+# 矿池支持 SSL 的话优先用 stratum+ssl
+pools:
+  - "stratum+ssl://btc.example-pool.com:443"
+  - "stratum+tcp://btc.example-pool.com:3333"
+
+# 拨号矿池超时
+dial_timeout: "10s"
+# 隧道读超时（需大于本地端 ping_interval 的 2 倍）
+read_timeout: "90s"

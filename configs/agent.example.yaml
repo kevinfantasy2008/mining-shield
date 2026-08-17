@@ -1,0 +1,20 @@
+# 本地端配置（部署在矿场侧 Linux 机器）
+# 矿机/矿池软件里填：stratum+tcp://<本机内网IP>:3333
+
+# 矿机接入监听地址
+listen: "0.0.0.0:3333"
+
+# 隧道服务器列表，多个则按顺序轮换 failover
+servers:
+  - url: "wss://your-domain.com/CHANGE-ME-random-path"
+    token: "CHANGE-ME-long-random-token-at-least-32-chars"
+  # - url: "wss://backup-domain.com/CHANGE-ME-random-path"
+  #   token: "CHANGE-ME-long-random-token-at-least-32-chars"
+
+# 隧道心跳间隔（保持 NAT 会话、探测死链）
+ping_interval: "25s"
+# 隧道读超时（需大于 ping_interval 的 2 倍）
+read_timeout: "90s"
+# 断线重连退避
+min_backoff: "1s"
+max_backoff: "30s"
