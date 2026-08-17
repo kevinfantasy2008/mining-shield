@@ -119,9 +119,26 @@ stratum+tcp://192.168.1.10:3333
 |---|---|---|
 | DNS → A 记录 | 代理状态 | **已代理（橙色云）** |
 | SSL/TLS → 概述 | 加密模式 | **Full (Strict)**（切勿 Flexible） |
-| SSL/TLS → Origin Server | 源站证书 | Create Certificate → 粘贴到 VPS 的 `/etc/nginx/ssl/mining-shield.pem` 和 `.key` |
+| SSL/TLS → Origin Server | 源站证书 | Create Certificate（见下方手动步骤） |
 | Network | WebSockets | On（默认即开） |
 | SSL/TLS → 边缘证书 | Always Use HTTPS | 建议 On |
+
+### 源站证书（CF Origin Certificate，需手动创建一次）
+
+这两个文件**无法由安装脚本自动生成**——证书绑定你的 Cloudflare 账号和域名，必须登录 CF 面板生成后手动粘贴到 VPS。只需做一次（有效期 15 年）：
+
+1. CF 面板 → 选你的域名 → **SSL/TLS → Origin Server** → **Create Certificate**
+2. 保持默认（RSA 2048、15 年、主机名已自动包含域名）→ Create
+3. 复制页面显示的两段文本，粘贴到 VPS（⚠️ 私钥只显示这一次）：
+
+```bash
+vi /etc/nginx/ssl/mining-shield.pem   # 粘贴 Origin Certificate（BEGIN CERTIFICATE 那段）
+vi /etc/nginx/ssl/mining-shield.key   # 粘贴 Private Key（BEGIN PRIVATE KEY 那段）
+chmod 600 /etc/nginx/ssl/mining-shield.key
+nginx -t && systemctl restart nginx
+```
+
+> 不用 CF 代理（VPS 直连模式）时跳过此节，改用 Let's Encrypt：`certbot --nginx -d 你的域名` 一条命令自动完成。
 
 ### 源站防火墙（关键）
 
