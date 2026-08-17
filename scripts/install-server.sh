@@ -2,7 +2,7 @@
 # mining-shield 服务器端（server）一键安装脚本
 # 用法（在公网 VPS 上执行）：
 #   GitHub:  curl -fsSL https://raw.githubusercontent.com/kevinfantasy2008/mining-shield/main/scripts/install-server.sh | sudo bash
-#   Gitee:   curl -fsSL https://gitee.com/kevinfantasy2008/mining-shield/raw/main/scripts/install-server.sh | sudo MINING_SHIELD_HOST=gitee.com bash
+#   Gitee:   curl -fsSL https://gitee.com/kevin-fantasy-2024/mining-shield/raw/main/scripts/install-server.sh | sudo MINING_SHIELD_HOST=gitee.com bash
 #
 # 可用环境变量覆盖默认值：
 #   MINING_SHIELD_REPO  仓库路径（默认 kevinfantasy2008/mining-shield，安装后请改成实际用户名）
@@ -109,14 +109,104 @@ EOF
 systemctl daemon-reload
 systemctl enable mining-shield-server
 
+# ============ Nginx 反代（443 入口 + 伪装站点） ============
+# 即使走 Cloudflare 代理也需要 Nginx：CF 只负责边缘终止 TLS 和隐藏 IP，
+# 源站上的伪装站点、秘密路径分发、token 双重校验都由 Nginx 承担。
+
+if ! command -v nginx >/dev/null 2>&1; then
+    echo "==> 安装 Nginx"
+    if command -v apt-get >/dev/null 2>&1; then
+        apt-get update -qq && apt-get install -y -qq nginx
+    elif command -v dnf >/dev/null 2>&1; then
+        dnf install -y -q nginx
+    elif command -v yum >/dev/null 2>&1; then
+        yum install -y -q nginx
+    else
+        echo "无法自动安装 Nginx（未识别 apt/dnf/yum），请手动安装后重跑本脚本" >&2
+        exit 1
+    fi
+fi
+
+# 从 server.yaml 提取 path/token/listen，注入 Nginx 配置
+YAML_PATH="$(grep '^path:' "${CONFIG_DIR}/server.yaml" | sed 's/^path: *"//; s/" *$//')"
+YAML_TOKEN="$(grep '^token:' "${CONFIG_DIR}/server.yaml" | sed 's/^token: *"//; s/" *$//')"
+YAML_LISTEN="$(grep '^listen:' "${CONFIG_DIR}/server.yaml" | sed 's/^listen: *"//; s/" *$//')"
+DOMAIN="${DOMAIN:-your-domain.com}"
+
+echo "==> 写入 Nginx 配置 /etc/nginx/conf.d/mining-shield.conf"
+cat > /etc/nginx/conf.d/mining-shield.conf <<EOF
+# mining-shield 隧道反代（由 install-server.sh 生成）
+# 用 Cloudflare 代理时：SSL 模式选 Full (Strict)，证书用 CF 的 Origin Certificate
+server {
+    listen 443 ssl;
+    server_name ${DOMAIN};
+
+    # Cloudflare 面板 → SSL/TLS → Origin Server → Create Certificate，粘贴到这两个文件
+    ssl_certificate     /etc/nginx/ssl/mining-shield.pem;
+    ssl_certificate_key /etc/nginx/ssl/mining-shield.key;
+    ssl_protocols       TLSv1.2 TLSv1.3;
+
+    # 伪装站点：放一个真实可访问的网站（主动探测者看到的是正常站点）
+    root /var/www/html;
+    index index.html;
+
+    location / {
+        try_files \$uri \$uri/ =404;
+    }
+
+    # 隧道入口（路径和 token 与 server.yaml 自动同步）
+    location ${YAML_PATH} {
+        if (\$http_x_auth_token != "${YAML_TOKEN}") { return 404; }
+        proxy_pass http://${YAML_LISTEN};
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade \$http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host \$host;
+        proxy_set_header X-Auth-Token \$http_x_auth_token;
+        proxy_read_timeout 3600s;
+        proxy_send_timeout 3600s;
+        proxy_buffering off;
+    }
+}
+EOF
+
+# 伪装站点占位页（建议换成真实网站内容）
+mkdir -p /var/www/html /etc/nginx/ssl
+if [ ! -f /var/www/html/index.html ]; then
+    echo '<!doctype html><html><head><title>Welcome</title></head><body><h1>Welcome</h1></body></html>' > /var/www/html/index.html
+fi
+
+if [ -f /etc/nginx/ssl/mining-shield.pem ]; then
+    nginx -t && systemctl enable nginx && systemctl restart nginx
+    echo "==> Nginx 已启动"
+else
+    echo "==> 证书还未安装，Nginx 暂不启动（见下方说明）"
+    systemctl enable nginx 2>/dev/null || true
+fi
+
 cat <<MSG
 
 安装完成。下一步：
-  1. 编辑配置：      vi ${CONFIG_DIR}/server.yaml
-     - pools 填真实矿池地址；path/token 已自动生成随机值
-  2. 启动服务：      systemctl start mining-shield-server
-  3. 查看日志：      journalctl -u mining-shield-server -f
-  4. 配置 Nginx：    参考 deploy/nginx.conf，把 location 路径和 token
-                     改成与 server.yaml 一致，挂上伪装站点和证书
-  5. 本地端 agent.yaml 的 url/token 与 server.yaml 保持一致
+
+  【证书】Cloudflare 代理模式下：
+     1. CF 面板 → SSL/TLS → 加密模式选 Full (Strict)
+     2. CF 面板 → SSL/TLS → Origin Server → Create Certificate（免费，15 年）
+     3. 把证书粘贴到 /etc/nginx/ssl/mining-shield.pem
+        把私钥粘贴到 /etc/nginx/ssl/mining-shield.key
+        chmod 600 /etc/nginx/ssl/mining-shield.key
+     4. nginx -t && systemctl restart nginx
+
+  【域名】编辑 /etc/nginx/conf.d/mining-shield.conf，
+     把 server_name 的 ${DOMAIN} 改成你的真实域名（或用 DOMAIN=xxx 重跑脚本）
+
+  【防火墙】只放行 Cloudflare IP 段访问 80/443，防止绕过 CF 直连源站：
+     curl -s https://www.cloudflare.com/ips-v4 | while read ip; do
+       ufw allow from \$ip to any port 443 proto tcp
+     done
+
+  【服务】
+     1. 编辑配置：vi ${CONFIG_DIR}/server.yaml（pools 填真实矿池；path/token 已随机生成）
+     2. 启动：     systemctl start mining-shield-server
+     3. 日志：     journalctl -u mining-shield-server -f
+     4. 本地端 agent.yaml 的 url 用 wss://你的域名 + path，token 与 server.yaml 一致
 MSG

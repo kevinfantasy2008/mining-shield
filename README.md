@@ -49,13 +49,16 @@ routes:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/kevinfantasy2008/mining-shield/main/scripts/install-server.sh | sudo bash
+
+# 可选：直接指定域名（写入 Nginx 配置）
+curl -fsSL ... | sudo DOMAIN=your-domain.com bash
 ```
 
-脚本会安装二进制、生成随机 `path`/`token` 并注册 systemd 服务。然后：
+脚本一次完成：安装二进制 → 生成随机 `path`/`token` → 注册 systemd 服务 → **安装 Nginx 并生成反代配置**（`/etc/nginx/conf.d/mining-shield.conf`，路径和 token 自动与 server.yaml 同步）。之后只需：
 
 1. 编辑 `/etc/mining-shield/server.yaml`，填入真实矿池地址；
-2. 配置 Nginx（参考 [deploy/nginx.conf](deploy/nginx.conf)）：443 端口 + Let's Encrypt 证书 + 伪装站点 + 秘密路径反代；
-3. `systemctl start mining-shield-server`。
+2. 安装证书（推荐 Cloudflare Origin Certificate，见下节）；
+3. `systemctl start mining-shield-server && systemctl restart nginx`。
 
 ### 本地端（矿场 Linux 机器）
 
@@ -71,12 +74,12 @@ curl -fsSL https://raw.githubusercontent.com/kevinfantasy2008/mining-shield/main
 
 ```bash
 # 本地端
-curl -fsSL https://gitee.com/kevinfantasy2008/mining-shield/raw/main/scripts/install-agent.sh | \
-  sudo MINING_SHIELD_HOST=gitee.com MINING_SHIELD_REPO=kevinfantasy2008/mining-shield bash
+curl -fsSL https://gitee.com/kevin-fantasy-2024/mining-shield/raw/main/scripts/install-agent.sh | \
+  sudo MINING_SHIELD_HOST=gitee.com MINING_SHIELD_REPO=kevin-fantasy-2024/mining-shield bash
 
 # 服务器端
-curl -fsSL https://gitee.com/kevinfantasy2008/mining-shield/raw/main/scripts/install-server.sh | \
-  sudo MINING_SHIELD_HOST=gitee.com MINING_SHIELD_REPO=kevinfantasy2008/mining-shield bash
+curl -fsSL https://gitee.com/kevin-fantasy-2024/mining-shield/raw/main/scripts/install-server.sh | \
+  sudo MINING_SHIELD_HOST=gitee.com MINING_SHIELD_REPO=kevin-fantasy-2024/mining-shield bash
 ```
 
 Gitee 没有 Release 直链，脚本会自动转为**从源码构建**（需要目标机器装有 Go，依赖走 goproxy.cn 国内加速）。
@@ -92,6 +95,52 @@ stratum+tcp://192.168.1.10:3333
 ```
 
 > 注意：矿机的备用矿池地址不要再填真实矿池的明文地址，否则隧道故障时矿机会绕过加密直连。
+
+## Cloudflare 代理模式（推荐）
+
+### 开了 CF 代理还需要 Nginx 吗？—— 需要
+
+这是最常见的疑问。CF 代理和 Nginx 是**两层不同的东西**，缺一不可：
+
+```
+矿机 → 本地端 agent → [Cloudflare 边缘] → [Nginx on VPS] → mining-shield-server → 矿池
+                          ↑ 这层做的事            ↑ 这层做的事
+                     终止 TLS（对客户端）      伪装站点（抗主动探测）
+                     隐藏 VPS 真实 IP         秘密路径分发
+                     抗 DDoS / IP 信誉        token 双重校验 → 反代到 127.0.0.1:8080
+```
+
+- CF 是「边缘」，只把流量转发到你的 VPS；它不提供源站上的网站和反代逻辑；
+- Nginx 是「源站入口」，没有它，443 端口上要么什么都没有（探测即暴露），要么得让隧道服务自己直接监听 443（失去伪装站点和路径分流）。
+
+### CF 面板设置清单
+
+| 位置 | 设置 | 值 |
+|---|---|---|
+| DNS → A 记录 | 代理状态 | **已代理（橙色云）** |
+| SSL/TLS → 概述 | 加密模式 | **Full (Strict)**（切勿 Flexible） |
+| SSL/TLS → Origin Server | 源站证书 | Create Certificate → 粘贴到 VPS 的 `/etc/nginx/ssl/mining-shield.pem` 和 `.key` |
+| Network | WebSockets | On（默认即开） |
+| SSL/TLS → 边缘证书 | Always Use HTTPS | 建议 On |
+
+### 源站防火墙（关键）
+
+开代理后务必锁死源站，否则别人扫到 VPS IP 就能绕过 CF 直连，代理形同虚设：
+
+```bash
+# 只放行 Cloudflare IP 段访问 443（SSH 端口按需另行保留）
+curl -s https://www.cloudflare.com/ips-v4 | while read ip; do
+  ufw allow from $ip to any port 443 proto tcp
+done
+```
+
+### 为什么隧道不会被 CF 断链
+
+CF 免费版 WebSocket 空闲超时约 100 秒；本地端 `ping_interval: 25s` 的心跳远小于此，长连接天然保活，无需任何改动。
+
+### 信任边界提醒
+
+开 CF 代理意味着 Cloudflare 作为中间人能解密看到你的隧道流量（token、矿工地址等）。这是 CDN 隐藏源站 IP 的固有代价。如果你的首要威胁是「按 IP/域名封锁」，这个交换划算；如果首要威胁是「流量内容保密性极端敏感」，则不开 CF 代理、直连 VPS（此时 Nginx 上用 Let's Encrypt 证书，`deploy/nginx.conf` 里的配置即为直连模式写法）。
 
 ## 手动构建
 

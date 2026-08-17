@@ -2,7 +2,7 @@
 # mining-shield 本地端（agent）一键安装脚本
 # 用法（在矿场侧 Linux 机器上执行）：
 #   GitHub:  curl -fsSL https://raw.githubusercontent.com/kevinfantasy2008/mining-shield/main/scripts/install-agent.sh | sudo bash
-#   Gitee:   curl -fsSL https://gitee.com/kevinfantasy2008/mining-shield/raw/main/scripts/install-agent.sh | sudo MINING_SHIELD_HOST=gitee.com bash
+#   Gitee:   curl -fsSL https://gitee.com/kevin-fantasy-2024/mining-shield/raw/main/scripts/install-agent.sh | sudo MINING_SHIELD_HOST=gitee.com bash
 # 或本地执行：
 #   sudo bash scripts/install-agent.sh
 #
