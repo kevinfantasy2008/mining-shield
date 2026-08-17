@@ -1,18 +1,27 @@
 #!/usr/bin/env bash
 # mining-shield 服务器端（server）一键安装脚本
 # 用法（在公网 VPS 上执行）：
-#   curl -fsSL https://raw.githubusercontent.com/<owner>/mining-shield/main/scripts/install-server.sh | sudo bash
+#   GitHub:  curl -fsSL https://raw.githubusercontent.com/<owner>/mining-shield/main/scripts/install-server.sh | sudo bash
+#   Gitee:   curl -fsSL https://gitee.com/<owner>/mining-shield/raw/main/scripts/install-server.sh | sudo MINING_SHIELD_HOST=gitee.com bash
 #
 # 可用环境变量覆盖默认值：
-#   MINING_SHIELD_REPO  GitHub 仓库（默认 <owner>/mining-shield）
+#   MINING_SHIELD_REPO  仓库路径（默认 <owner>/mining-shield，安装后请改成实际用户名）
+#   MINING_SHIELD_HOST  github.com（默认）或 gitee.com（国内网络推荐）
 #   INSTALL_DIR         二进制安装目录（默认 /usr/local/bin）
 #   CONFIG_DIR          配置目录（默认 /etc/mining-shield）
 set -euo pipefail
 
 REPO="${MINING_SHIELD_REPO:-<owner>/mining-shield}"
+HOST="${MINING_SHIELD_HOST:-github.com}"
 INSTALL_DIR="${INSTALL_DIR:-/usr/local/bin}"
 CONFIG_DIR="${CONFIG_DIR:-/etc/mining-shield}"
 BIN_NAME="mining-shield-server"
+
+case "$HOST" in
+    github.com) CLONE_URL="https://github.com/${REPO}.git" ;;
+    gitee.com)  CLONE_URL="https://gitee.com/${REPO}.git" ;;
+    *) echo "MINING_SHIELD_HOST 只支持 github.com 或 gitee.com" >&2; exit 1 ;;
+esac
 
 if [ "$(id -u)" -ne 0 ]; then
     echo "请用 root 运行：sudo bash $0" >&2
@@ -28,21 +37,26 @@ esac
 echo "==> 架构: linux/$GOARCH"
 
 install_from_release() {
-    local url="https://github.com/${REPO}/releases/latest/download/${BIN_NAME}-linux-${GOARCH}"
-    echo "==> 从 GitHub Release 下载: $url"
+    # Gitee 没有 latest/download 直链，会失败并自动走源码构建
+    local url="https://${HOST}/${REPO}/releases/latest/download/${BIN_NAME}-linux-${GOARCH}"
+    echo "==> 尝试从 Release 下载: $url"
     curl -fsSL "$url" -o "${INSTALL_DIR}/${BIN_NAME}"
 }
 
 install_from_source() {
-    echo "==> Release 下载失败，尝试从源码构建"
+    echo "==> Release 下载失败，转为从源码构建"
     if ! command -v go >/dev/null 2>&1; then
-        echo "未安装 Go，无法从源码构建。请检查 Release 地址或手动安装 Go。" >&2
+        echo "未安装 Go，无法从源码构建。请先安装 Go（国内可用 https://golang.google.cn/dl/）。" >&2
         exit 1
+    fi
+    # 国内网络走 goproxy.cn 加速依赖下载
+    if [ "$HOST" = "gitee.com" ] && [ -z "${GOPROXY:-}" ]; then
+        export GOPROXY="https://goproxy.cn,direct"
     fi
     local tmp
     tmp="$(mktemp -d)"
     trap 'rm -rf "$tmp"' EXIT
-    git clone --depth 1 "https://github.com/${REPO}.git" "$tmp/mining-shield"
+    git clone --depth 1 "$CLONE_URL" "$tmp/mining-shield"
     (cd "$tmp/mining-shield" && go build -trimpath -ldflags "-s -w" -o "${INSTALL_DIR}/${BIN_NAME}" ./cmd/server)
 }
 

@@ -37,6 +37,24 @@ curl -fsSL https://raw.githubusercontent.com/<owner>/mining-shield/main/scripts/
 
 然后编辑 `/etc/mining-shield/agent.yaml`（url/token 与服务器端一致），`systemctl start mining-shield-agent`。
 
+### 国内网络：Gitee 镜像
+
+如果目标机器访问 GitHub 困难，使用 Gitee 镜像仓库：
+
+```bash
+# 本地端
+curl -fsSL https://gitee.com/<owner>/mining-shield/raw/main/scripts/install-agent.sh | \
+  sudo MINING_SHIELD_HOST=gitee.com MINING_SHIELD_REPO=<owner>/mining-shield bash
+
+# 服务器端
+curl -fsSL https://gitee.com/<owner>/mining-shield/raw/main/scripts/install-server.sh | \
+  sudo MINING_SHIELD_HOST=gitee.com MINING_SHIELD_REPO=<owner>/mining-shield bash
+```
+
+Gitee 没有 Release 直链，脚本会自动转为**从源码构建**（需要目标机器装有 Go，依赖走 goproxy.cn 国内加速）。
+
+仓库同步：Gitee 网页端「新建仓库 → 导入已有仓库」填入 GitHub 地址即可一键导入；之后在 Gitee 仓库「管理」页可开启自动同步，或用 `git push gitee main` 手动推送。
+
 ### 矿机配置
 
 矿池地址填本地端的地址，例如：
