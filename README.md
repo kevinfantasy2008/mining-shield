@@ -66,7 +66,17 @@ curl -fsSL ... | sudo DOMAIN=your-domain.com bash
 curl -fsSL https://raw.githubusercontent.com/kevinfantasy2008/mining-shield/main/scripts/install-agent.sh | sudo bash
 ```
 
-然后编辑 `/etc/mining-shield/agent.yaml`（url/token 与服务器端一致），`systemctl start mining-shield-agent`。
+然后编辑 `/etc/mining-shield/agent.yaml`，`systemctl start mining-shield-agent`。
+
+> **注意：`agent.yaml` 里的 `url` 和 `token` 不是自动生成的**，脚本只写占位符模板——随机 `path`/`token` 是在 VPS 上由 `install-server.sh` 生成的，矿场机器无从得知，需要你手动同步。在 VPS 上 `sudo cat /etc/mining-shield/server.yaml`，按此映射填写：
+>
+> ```yaml
+> # server.yaml（VPS）                   →  # agent.yaml（矿场机器）
+> path: "/ab12cd34ef56"                 →    url: "wss://你的域名/ab12cd34ef56"
+> token: "61fa..."                      →    token: "61fa..."   # 原样复制，一字不差
+> ```
+>
+> 即 `url = wss://` + 你的域名 + path 的值。两端 token/path 不一致时服务器会返回 404 拒绝连接。日志出现 `tunnel established` 即为成功。
 
 ### 国内网络：Gitee 镜像
 
