@@ -75,6 +75,10 @@ token: "${TOKEN}"
 pools:
   - "stratum+ssl://btc.example-pool.com:443"
   - "stratum+tcp://btc.example-pool.com:3333"
+# 多币种命名路由（键与本地端 listeners[].route 对应）：
+# routes:
+#   kas:
+#     - "stratum+tcp://kas.example-pool.com:16110"
 dial_timeout: "10s"
 read_timeout: "90s"
 EOF

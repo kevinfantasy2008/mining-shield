@@ -9,11 +9,20 @@ path: "/CHANGE-ME-random-path"
 # 认证令牌（长随机串，与本地端一致）。生成：openssl rand -hex 32
 token: "CHANGE-ME-long-random-token-at-least-32-chars"
 
-# 真实矿池列表，按顺序 failover
+# 默认路由的真实矿池列表（本地端 route 为空的流量），按顺序 failover
 # 矿池支持 SSL 的话优先用 stratum+ssl
 pools:
   - "stratum+ssl://btc.example-pool.com:443"
   - "stratum+tcp://btc.example-pool.com:3333"
+
+# 多币种命名路由：键为路由名（与本地端 listeners[].route 对应），
+# 值为该币种的矿池列表（组内按顺序 failover）
+# routes:
+#   kas:
+#     - "stratum+tcp://kas.example-pool.com:16110"
+#   ltc:
+#     - "stratum+ssl://ltc.example-pool.com:50505"
+#     - "stratum+tcp://ltc.example-pool.com:3333"
 
 # 拨号矿池超时
 dial_timeout: "10s"

@@ -13,7 +13,35 @@
 - **矿机零改造**：矿机仍填标准 `stratum+tcp://` 地址，只是指向本地端；
 - **抗审查**：隧道走 wss/443 + 正规 CA 证书，服务器 443 同时挂伪装网站，未认证探测一律 404；可选套 CDN 隐藏 VPS 真实 IP；
 - **字节级透传**：Stratum 会话由矿机与矿池直接协商，中转层不解析协议，天然兼容各币种与固件；
+- **多币种多矿池**：本地端多个监听端口各绑定路由，服务器端按路由分发到对应矿池组；
 - **多路复用**：一条隧道承载多台矿机（StreamID 复用），断线指数退避重连，矿池侧多地址 failover。
+
+## 多币种路由
+
+本地端用 `listeners` 给不同币种开不同端口，服务器端用 `routes` 配各自的矿池组：
+
+```yaml
+# agent.yaml（本地端）
+listeners:
+  - listen: "0.0.0.0:3333"        # 默认路由 → 服务器端 pools
+  - listen: "0.0.0.0:4333"
+    route: "kas"                  # KAS 矿机连 4333
+  - listen: "0.0.0.0:5333"
+    route: "ltc"                  # LTC 矿机连 5333
+```
+
+```yaml
+# server.yaml（服务器端）
+pools:                            # 默认路由（如 BTC）
+  - "stratum+ssl://btc.example-pool.com:443"
+routes:
+  kas:
+    - "stratum+tcp://kas.example-pool.com:16110"
+  ltc:
+    - "stratum+ssl://ltc.example-pool.com:50505"
+```
+
+所有币种共享同一条加密隧道；每个矿池组内仍可配多个地址做 failover。
 
 ## 快速部署
 
@@ -107,6 +135,7 @@ scripts/           一键安装脚本
 
 ## 路线图
 
+- [x] 多币种多矿池路由（v0.2.0）
 - [ ] 帧填充（padding）与心跳抖动，抗流量行为分析
 - [ ] 矿机在线状态 / share 统计（轻解析 `mining.submit`）
 - [ ] Prometheus metrics 与简单 Web 面板

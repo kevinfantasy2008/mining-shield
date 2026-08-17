@@ -1,8 +1,18 @@
 # 本地端配置（部署在矿场侧 Linux 机器）
-# 矿机/矿池软件里填：stratum+tcp://<本机内网IP>:3333
+# 矿机/矿池软件里填：stratum+tcp://<本机内网IP>:<端口>
 
-# 矿机接入监听地址
+# 单币种简写：一个监听端口，走默认路由（对应服务器端 pools）
 listen: "0.0.0.0:3333"
+
+# 多币种：用 listeners 列表，每个端口绑定一个路由，
+# 路由名对应服务器端 server.yaml 的 routes 键。listen 与 listeners 可叠加。
+# listeners:
+#   - listen: "0.0.0.0:3333"
+#     route: ""        # 空 = 默认路由（BTC）
+#   - listen: "0.0.0.0:4333"
+#     route: "kas"     # KAS 矿机连这个端口
+#   - listen: "0.0.0.0:5333"
+#     route: "ltc"     # LTC 矿机连这个端口
 
 # 隧道服务器列表，多个则按顺序轮换 failover
 servers:

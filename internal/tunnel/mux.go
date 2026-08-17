@@ -22,8 +22,9 @@ const (
 	readBufSize     = 32 * 1024
 )
 
-// OnOpenFunc 收到对端 OPEN 时建立上行连接（服务器端：拨号矿池）。
-type OnOpenFunc func(id uint32) (io.ReadWriteCloser, error)
+// OnOpenFunc 收到对端 OPEN 时建立上行连接（服务器端：按 route 拨号对应矿池组）。
+// route 为空字符串表示默认路由。
+type OnOpenFunc func(id uint32, route string) (io.ReadWriteCloser, error)
 
 type Mux struct {
 	write  func([]byte) error // 发送一条 WS binary message
@@ -63,7 +64,12 @@ func NewMux(write func([]byte) error, onOpen OnOpenFunc) *Mux {
 func (m *Mux) Done() <-chan struct{} { return m.done }
 
 // Open 本地端使用：注册一条新 Stream（关联矿机连接）并通知对端。
-func (m *Mux) Open(id uint32, rw io.ReadWriteCloser) error {
+// route 为路由名（空 = 默认路由），服务器端据此选择矿池组。
+func (m *Mux) Open(id uint32, rw io.ReadWriteCloser, route string) error {
+	if len(route) > proto.MaxRouteLen {
+		rw.Close()
+		return errors.New("route name too long")
+	}
 	m.mu.Lock()
 	if m.closed {
 		m.mu.Unlock()
@@ -72,7 +78,7 @@ func (m *Mux) Open(id uint32, rw io.ReadWriteCloser) error {
 	}
 	m.addStreamLocked(id, rw)
 	m.mu.Unlock()
-	m.send(proto.Frame{Type: proto.TypeOpen, StreamID: id})
+	m.send(proto.Frame{Type: proto.TypeOpen, StreamID: id, Payload: []byte(route)})
 	return nil
 }
 
@@ -103,6 +109,11 @@ func (m *Mux) HandleMessage(b []byte) error {
 			m.send(proto.Frame{Type: proto.TypeClose, StreamID: f.StreamID})
 			return nil
 		}
+		if len(f.Payload) > proto.MaxRouteLen {
+			m.send(proto.Frame{Type: proto.TypeClose, StreamID: f.StreamID})
+			return nil
+		}
+		route := string(f.Payload)
 		m.mu.Lock()
 		_, dup := m.streams[f.StreamID]
 		m.mu.Unlock()
@@ -110,9 +121,9 @@ func (m *Mux) HandleMessage(b []byte) error {
 			m.closeStream(f.StreamID, true)
 			return nil
 		}
-		rw, err := m.onOpen(f.StreamID)
+		rw, err := m.onOpen(f.StreamID, route)
 		if err != nil {
-			slog.Warn("open upstream failed", "stream", f.StreamID, "err", err)
+			slog.Warn("open upstream failed", "stream", f.StreamID, "route", route, "err", err)
 			m.send(proto.Frame{Type: proto.TypeClose, StreamID: f.StreamID})
 			return nil
 		}

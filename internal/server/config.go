@@ -19,9 +19,12 @@ type Config struct {
 	Path string `yaml:"path"`
 	// Token 认证令牌（长随机串），本地端在 X-Auth-Token 头携带
 	Token string `yaml:"token"`
-	// Pools 真实矿池地址列表，按顺序 failover。
+	// Pools 默认路由的矿池列表（本地端 route 为空的流量），按顺序 failover。
 	// 支持 stratum+tcp://host:port 与 stratum+ssl://host:port
 	Pools []string `yaml:"pools"`
+	// Routes 命名路由 → 矿池列表，用于多币种。键为路由名，与本地端
+	// listeners[].route 对应；每组内按顺序 failover。
+	Routes map[string][]string `yaml:"routes"`
 
 	DialTimeout config.Duration `yaml:"dial_timeout"` // 拨号矿池超时，默认 10s
 	ReadTimeout config.Duration `yaml:"read_timeout"` // 隧道读超时，默认 90s
@@ -48,12 +51,28 @@ func LoadConfig(path string) (*Config, error) {
 	if len(cfg.Token) < 16 {
 		return nil, errors.New("config: token must be at least 16 chars (use a long random string)")
 	}
-	if len(cfg.Pools) == 0 {
-		return nil, errors.New("config: at least one pool is required")
+	if len(cfg.Pools) == 0 && len(cfg.Routes) == 0 {
+		return nil, errors.New("config: at least one pool (pools or routes) is required")
 	}
 	for _, p := range cfg.Pools {
 		if _, _, err := parsePoolURL(p); err != nil {
 			return nil, fmt.Errorf("config: pool %q: %w", p, err)
+		}
+	}
+	for route, pools := range cfg.Routes {
+		if route == "" {
+			return nil, errors.New("config: route name cannot be empty (use pools for the default route)")
+		}
+		if len(route) > 64 {
+			return nil, fmt.Errorf("config: route %q too long (max 64 chars)", route)
+		}
+		if len(pools) == 0 {
+			return nil, fmt.Errorf("config: route %q has no pools", route)
+		}
+		for _, p := range pools {
+			if _, _, err := parsePoolURL(p); err != nil {
+				return nil, fmt.Errorf("config: route %q pool %q: %w", route, p, err)
+			}
 		}
 	}
 	return cfg, nil

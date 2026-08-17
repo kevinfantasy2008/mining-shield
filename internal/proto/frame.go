@@ -16,7 +16,7 @@ import (
 )
 
 const (
-	TypeOpen  byte = 0x01 // 建立新 Stream（Payload 为空，预留扩展）
+	TypeOpen  byte = 0x01 // 建立新 Stream（Payload 为路由名，空 = 默认路由）
 	TypeData  byte = 0x02 // 数据载荷，原样转发
 	TypeClose byte = 0x03 // 关闭 Stream
 )
@@ -26,7 +26,9 @@ const (
 	MaxPayload = 1 << 20 // 1 MiB
 	// MaxFrameSize = 头部长度 + MaxPayload，用于 WS 读限制
 	MaxFrameSize = 5 + MaxPayload
-	headerSize   = 5
+	// MaxRouteLen OPEN 帧中路由名的最大长度
+	MaxRouteLen = 255
+	headerSize  = 5
 )
 
 // Frame 隧道内的一帧

@@ -4,6 +4,7 @@ package agent
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"math/rand"
 	"net"
@@ -29,22 +30,30 @@ func New(cfg *Config) *Agent {
 	return &Agent{cfg: cfg}
 }
 
-// Run 启动矿机监听并维持隧道，直到 ctx 取消。
+// Run 启动所有矿机监听并维持隧道，直到 ctx 取消。
 func (a *Agent) Run(ctx context.Context) error {
-	ln, err := net.Listen("tcp", a.cfg.Listen)
-	if err != nil {
-		return err
+	var wg sync.WaitGroup
+	for _, l := range a.cfg.Listeners {
+		ln, err := net.Listen("tcp", l.Listen)
+		if err != nil {
+			return fmt.Errorf("listen %s: %w", l.Listen, err)
+		}
+		defer ln.Close()
+		slog.Info("miner listener started", "addr", l.Listen, "route", routeDisplay(l.Route))
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			a.acceptLoop(ctx, ln, l.Route)
+		}()
 	}
-	defer ln.Close()
-	slog.Info("miner listener started", "addr", a.cfg.Listen)
 
-	go a.acceptLoop(ctx, ln)
-
-	return a.tunnelLoop(ctx)
+	err := a.tunnelLoop(ctx)
+	wg.Wait()
+	return err
 }
 
 // acceptLoop 接受矿机连接。隧道未就绪时直接断开，让矿机走自己的重试逻辑。
-func (a *Agent) acceptLoop(ctx context.Context, ln net.Listener) {
+func (a *Agent) acceptLoop(ctx context.Context, ln net.Listener, route string) {
 	go func() {
 		<-ctx.Done()
 		ln.Close()
@@ -59,11 +68,11 @@ func (a *Agent) acceptLoop(ctx context.Context, ln net.Listener) {
 			time.Sleep(100 * time.Millisecond)
 			continue
 		}
-		a.handleMiner(c)
+		a.handleMiner(c, route)
 	}
 }
 
-func (a *Agent) handleMiner(c net.Conn) {
+func (a *Agent) handleMiner(c net.Conn, route string) {
 	if tc, ok := c.(*net.TCPConn); ok {
 		tc.SetNoDelay(true)
 	}
@@ -71,7 +80,7 @@ func (a *Agent) handleMiner(c net.Conn) {
 	m := a.mux
 	if m == nil {
 		a.mu.Unlock()
-		slog.Warn("tunnel not ready, rejecting miner", "remote", c.RemoteAddr())
+		slog.Warn("tunnel not ready, rejecting miner", "remote", c.RemoteAddr(), "route", routeDisplay(route))
 		c.Close()
 		return
 	}
@@ -79,11 +88,11 @@ func (a *Agent) handleMiner(c net.Conn) {
 	id := a.nextID
 	a.mu.Unlock()
 
-	if err := m.Open(id, c); err != nil {
+	if err := m.Open(id, c, route); err != nil {
 		slog.Warn("open stream failed", "remote", c.RemoteAddr(), "err", err)
 		return
 	}
-	slog.Info("miner connected", "remote", c.RemoteAddr(), "stream", id)
+	slog.Info("miner connected", "remote", c.RemoteAddr(), "stream", id, "route", routeDisplay(route))
 }
 
 // tunnelLoop 按服务器列表轮换拨号，断线后指数退避重连。
@@ -217,6 +226,13 @@ func jitter(d time.Duration) time.Duration {
 	// ±20% 抖动，避免断线风暴时所有节点同时重连
 	delta := d / 5
 	return d - delta + time.Duration(rand.Int63n(int64(2*delta)+1))
+}
+
+func routeDisplay(route string) string {
+	if route == "" {
+		return "(default)"
+	}
+	return route
 }
 
 type statusError struct {

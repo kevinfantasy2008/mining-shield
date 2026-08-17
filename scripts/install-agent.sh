@@ -71,6 +71,12 @@ if [ ! -f "${CONFIG_DIR}/agent.yaml" ]; then
     echo "==> 生成配置模板 ${CONFIG_DIR}/agent.yaml"
     cat > "${CONFIG_DIR}/agent.yaml" <<'EOF'
 listen: "0.0.0.0:3333"
+# 多币种改用 listeners 列表，每个端口绑定路由（对应服务器端 routes 键）：
+# listeners:
+#   - listen: "0.0.0.0:3333"
+#     route: ""
+#   - listen: "0.0.0.0:4333"
+#     route: "kas"
 servers:
   - url: "wss://your-domain.com/CHANGE-ME-random-path"
     token: "CHANGE-ME-long-random-token-at-least-32-chars"

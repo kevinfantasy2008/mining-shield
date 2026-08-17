@@ -9,6 +9,7 @@ import (
 	"context"
 	"crypto/tls"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"net"
@@ -52,7 +53,8 @@ func (s *Server) Run(ctx context.Context) error {
 		httpSrv.Shutdown(shutdownCtx)
 	}()
 
-	slog.Info("relay server started", "addr", s.cfg.Listen, "path", s.cfg.Path, "pools", len(s.cfg.Pools))
+	slog.Info("relay server started", "addr", s.cfg.Listen, "path", s.cfg.Path,
+		"default_pools", len(s.cfg.Pools), "routes", len(s.cfg.Routes))
 	err := httpSrv.ListenAndServe()
 	if errors.Is(err, http.ErrServerClosed) {
 		return nil
@@ -105,18 +107,27 @@ func (s *Server) serve(conn *websocket.Conn) {
 	}
 }
 
-// openPool 收到 OPEN 时按配置顺序拨号矿池，全部失败则返回错误（本地端会关流）。
-func (s *Server) openPool(id uint32) (io.ReadWriteCloser, error) {
+// openPool 收到 OPEN 时按路由选矿池组、组内按顺序 failover 拨号。
+// 路由不存在或全部拨号失败则返回错误（本地端会关流，矿机自行重试）。
+func (s *Server) openPool(id uint32, route string) (io.ReadWriteCloser, error) {
+	pools := s.cfg.Pools
+	if route != "" {
+		p, ok := s.cfg.Routes[route]
+		if !ok {
+			return nil, fmt.Errorf("unknown route %q", route)
+		}
+		pools = p
+	}
 	var lastErr error
-	for _, p := range s.cfg.Pools {
+	for _, p := range pools {
 		scheme, addr, _ := parsePoolURL(p)
 		c, err := dialPool(scheme, addr, s.cfg.DialTimeout.D())
 		if err != nil {
-			slog.Warn("pool dial failed, trying next", "stream", id, "pool", p, "err", err)
+			slog.Warn("pool dial failed, trying next", "stream", id, "route", routeDisplay(route), "pool", p, "err", err)
 			lastErr = err
 			continue
 		}
-		slog.Info("pool connected", "stream", id, "pool", p)
+		slog.Info("pool connected", "stream", id, "route", routeDisplay(route), "pool", p)
 		return c, nil
 	}
 	return nil, lastErr
@@ -134,6 +145,13 @@ func dialPool(scheme, addr string, timeout time.Duration) (net.Conn, error) {
 	default:
 		return dialer.Dial("tcp", addr)
 	}
+}
+
+func routeDisplay(route string) string {
+	if route == "" {
+		return "(default)"
+	}
+	return route
 }
 
 // tokenEqual 常量时间比较，避免时序侧信道。
